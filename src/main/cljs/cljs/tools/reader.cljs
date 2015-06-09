@@ -12,19 +12,19 @@
   (:refer-clojure :exclude [read read-line read-string char
                             default-data-readers *default-data-reader-fn*
                             *data-readers* *suppress-read*])
-  (:require
-   [cljs.tools.reader.reader-types :refer
-    [read-char reader-error unread peek-char indexing-reader?
-     get-line-number get-column-number get-file-name
-     string-push-back-reader log-source]]
-   [cljs.tools.reader.impl.utils :refer
-    [char ex-info? whitespace? numeric? desugar-meta next-id munge
-     ReaderConditional reader-conditional reader-conditional?]]
-   [cljs.tools.reader.impl.commons :refer
-    [number-literal? read-past match-number parse-symbol read-comment throwing-reader]]
-   [clojure.string :as string]
-   [goog.array]
-   [goog.string]))
+  (:require [cljs.tools.reader.reader-types :refer
+             [read-char reader-error unread peek-char indexing-reader?
+              get-line-number get-column-number get-file-name
+              string-push-back-reader log-source]]
+            [cljs.tools.reader.impl.utils :refer
+             [char ex-info? whitespace? numeric? desugar-meta next-id munge
+              ReaderConditional reader-conditional reader-conditional?]]
+            [cljs.tools.reader.impl.commons :refer
+             [number-literal? read-past match-number parse-symbol read-comment throwing-reader]]
+            [clojure.string :as string]
+            [goog.array :as garray]
+            [goog.string :as gstring])
+  (:import goog.string.StringBuffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; helpers
@@ -47,7 +47,7 @@
   [rdr initch]
   (if-not initch
     (reader-error rdr "EOF while reading")
-    (loop [sb (goog.string.StringBuffer.) ch initch]
+    (loop [sb (StringBuffer.) ch initch]
       (if (or (whitespace? ch)
               (macro-terminating? ch)
               (nil? ch))
@@ -76,15 +76,15 @@
 
 (defn read-regex
   [rdr ch opts pending-forms]
-  (let [sb (goog.string.StringBuffer.)]
+  (let [sb (StringBuffer.)]
     (loop [ch (read-char rdr)]
-      (if (identical? \" ch)
+      (if (= \" ch)
         (re-pattern (str sb))
         (if (nil? ch)
           (reader-error rdr "EOF while reading regex")
           (do
             (.append sb ch )
-            (when (identical? \\ ch)
+            (when (= \\ ch)
               (let [ch (read-char rdr)]
                 (if (nil? ch)
                   (reader-error rdr "EOF while reading regex"))
@@ -99,40 +99,40 @@
 
 (defn- read-unicode-char
   ([token offset length base]
-   (let [l (+ offset length)]
-     (when-not (== (count token) l)
-       (throw (ex-info. (str "Invalid unicode character: \\" token)
-                        {:type :illegal-argument})))
-     (loop [i offset uc 0]
-       (if (== i l)
-         (js/String.fromCharCode uc)
-         (let [d (char-code (nth token i) base)]
-           (if (== d -1)
-             (throw (ex-info. (str "Invalid digit: " (nth token i))
-                              {:type :illegal-argument}))
-             (recur (inc i) (+ d (* uc base)))))))))
+     (let [l (+ offset length)]
+       (when-not (== (count token) l)
+         (throw (ex-info. (str "Invalid unicode character: \\" token)
+                          {:type :illegal-argument})))
+       (loop [i offset uc 0]
+         (if (== i l)
+           (js/String.fromCharCode uc)
+           (let [d (char-code (nth token i) base)]
+             (if (== d -1)
+               (throw (ex-info. (str "Invalid digit: " (nth token i))
+                                {:type :illegal-argument}))
+               (recur (inc i) (+ d (* uc base)))))))))
 
   ([rdr initch base length exact?]
-   (loop [i 1 uc (char-code initch base)]
-     (if (== uc -1)
-       (throw (ex-info. (str "Invalid digit: " initch)
-                        {:type :illegal-argument}))
-       (if-not (== i length)
-         (let [ch (peek-char rdr)]
-           (if (or (whitespace? ch)
-                   (macros ch)
-                   (nil? ch))
-             (if exact?
-               (throw (ex-info. (str "Invalid character length: " i ", should be: " length)
-                                {:type :illegal-argument}))
-               (js/String.fromCharCode uc))
-             (let [d (char-code ch base)]
-               (read-char rdr)
-               (if (== d -1)
-                 (throw (ex-info. (str "Invalid digit: " ch)
+     (loop [i 1 uc (char-code initch base)]
+       (if (== uc -1)
+         (throw (ex-info. (str "Invalid digit: " initch)
+                          {:type :illegal-argument}))
+         (if-not (== i length)
+           (let [ch (peek-char rdr)]
+             (if (or (whitespace? ch)
+                     (macros ch)
+                     (nil? ch))
+               (if exact?
+                 (throw (ex-info. (str "Invalid character length: " i ", should be: " length)
                                   {:type :illegal-argument}))
-                 (recur (inc i) (+ d (* uc base)))))))
-         (js/String.fromCharCode uc))))))
+                 (js/String.fromCharCode uc))
+               (let [d (char-code ch base)]
+                 (read-char rdr)
+                 (if (== d -1)
+                   (throw (ex-info. (str "Invalid digit: " ch)
+                                    {:type :illegal-argument}))
+                   (recur (inc i) (+ d (* uc base)))))))
+           (js/String.fromCharCode uc))))))
 
 (def ^:private ^:const upper-limit (.charCodeAt \uD7ff 0))
 (def ^:private ^:const lower-limit (.charCodeAt \uE000 0))
@@ -152,35 +152,35 @@
             token-len (count token)]
         (cond
 
-          (== 1 token-len)  (nth token 0) ;;; no char type - so can't ensure/cache char
+         (== 1 token-len)  (nth token 0) ;;; no char type - so can't ensure/cache char
 
-          (= token "newline") \newline
-          (= token "space") \space
-          (= token "tab") \tab
-          (= token "backspace") \backspace
-          (= token "formfeed") \formfeed
-          (= token "return") \return
+         (= token "newline") \newline
+         (= token "space") \space
+         (= token "tab") \tab
+         (= token "backspace") \backspace
+         (= token "formfeed") \formfeed
+         (= token "return") \return
 
-          (goog.string/startsWith token "u")
-          (let [c (read-unicode-char token 1 4 16)
-                ic (.charCodeAt c 0)]
-            (if (and (> ic upper-limit)
-                     (< ic lower-limit))
-              (reader-error rdr "Invalid character constant: \\u" c)
-              c))
+         (gstring/startsWith token "u")
+         (let [c (read-unicode-char token 1 4 16)
+               ic (.charCodeAt c 0)]
+           (if (and (> ic upper-limit)
+                    (< ic lower-limit))
+             (reader-error rdr "Invalid character constant: \\u" c)
+             c))
 
-          (goog.string/startsWith token "o")
-          (let [len (dec token-len)]
-            (if (> len 3)
-              (reader-error rdr "Invalid octal escape sequence length: " len)
-              (let [offset 1
-                    base 8
-                    uc (read-unicode-char token offset len base)]
-                (if-not (valid-octal? (subs token offset) base)
-                  (reader-error rdr "Octal escape sequence must be in range [0, 377]")
-                  uc))))
+         (gstring/startsWith token "o")
+         (let [len (dec token-len)]
+           (if (> len 3)
+             (reader-error rdr "Invalid octal escape sequence length: " len)
+             (let [offset 1
+                   base 8
+                   uc (read-unicode-char token offset len base)]
+               (if-not (valid-octal? (subs token offset) base)
+                 (reader-error rdr "Octal escape sequence must be in range [0, 377]")
+                 uc))))
 
-          :else (reader-error rdr "Unsupported character: \\" token)))
+         :else (reader-error rdr "Unsupported character: \\" token)))
       (reader-error rdr "EOF while reading character"))))
 
 (defn- starting-line-col-info [rdr]
@@ -269,7 +269,7 @@
 
 (defn- read-number
   [rdr initch]
-  (loop [sb (doto (goog.string.StringBuffer.) (.append initch))
+  (loop [sb (doto (StringBuffer.) (.append initch))
          ch (read-char rdr)]
     (if (or (whitespace? ch) (macros ch) (nil? ch))
       (let [s (str sb)]
@@ -301,7 +301,7 @@
 
 (defn- read-string*
   [reader _ opts pending-forms]
-  (loop [sb (goog.string.StringBuffer.)
+  (loop [sb (StringBuffer.)
          ch (read-char reader)]
     (case ch
       nil (reader-error reader "EOF while reading string")
@@ -358,20 +358,20 @@
   "Read metadata and return the following object with the metadata applied"
   [rdr _ opts pending-forms]
   (log-source rdr
-    (fn []
-      (let [[line column] (starting-line-col-info rdr)
-            m (desugar-meta (read* rdr true nil opts pending-forms))]
-        (when-not (map? m)
-          (reader-error rdr "Metadata must be Symbol, Keyword, String or Map"))
-        (let [o (read* rdr true nil opts pending-forms)]
-          (if (satisfies? IMeta o)
-            (let [m (if (and line (seq? o))
-                      (assoc m :line line :column column)
-                      m)]
-              (if (satisfies? IWithMeta o)
-                (with-meta o (merge (meta o) m))
-                (reset-meta! o m)))
-            (reader-error rdr "Metadata can only be applied to IMetas")))))))
+              (fn []
+                (let [[line column] (starting-line-col-info rdr)
+                      m (desugar-meta (read* rdr true nil opts pending-forms))]
+                  (when-not (map? m)
+                    (reader-error rdr "Metadata must be Symbol, Keyword, String or Map"))
+                  (let [o (read* rdr true nil opts pending-forms)]
+                    (if (satisfies? IMeta o)
+                      (let [m (if (and line (seq? o))
+                                (assoc m :line line :column column)
+                                m)]
+                        (if (satisfies? IWithMeta o)
+                          (with-meta o (merge (meta o) m))
+                          (reset-meta! o m)))
+                      (reader-error rdr "Metadata can only be applied to IMetas")))))))
 
 (defn- read-set
   [rdr _ opts pending-forms]
@@ -456,29 +456,29 @@
         result (loop [matched nil
                       finished nil]
                  (cond
-                   ;; still looking for match, read feature+form
-                   (nil? matched)
-                   (let [match (match-feature first-line rdr opts pending-forms)]
-                     (if (not (nil? match))
-                       (when-not (identical? match READ_FINISHED)
-                         (recur match nil))
-                       (recur nil nil)))
+                  ;; still looking for match, read feature+form
+                  (nil? matched)
+                  (let [match (match-feature first-line rdr opts pending-forms)]
+                    (if (not (nil? match))
+                      (when-not (identical? match READ_FINISHED)
+                        (recur match nil))
+                      (recur nil nil)))
 
-                   ;; found match, just read and ignore the rest
-                   (not (identical? finished READ_FINISHED))
-                   (recur matched (read-suppress first-line rdr opts pending-forms))
+                  ;; found match, just read and ignore the rest
+                  (not (identical? finished READ_FINISHED))
+                  (recur matched (read-suppress first-line rdr opts pending-forms))
 
-                   :else
-                   matched))]
+                  :else
+                  matched))]
     (if (nil? result)
       rdr
       (if splicing
         (do
           (if (satisfies? ISequential result)
-           (do
-             (goog.array/insertArrayAt pending-forms (to-array result) 0)
-             rdr)
-           (reader-error rdr "Spliced form list in read-cond-splicing must implement java.util.List.")))
+            (do
+              (garray/insertArrayAt pending-forms (to-array result) 0)
+              rdr)
+            (reader-error rdr "Spliced form list in read-cond-splicing must implement java.util.List.")))
         result))))
 
 (defn- read-cond
@@ -552,28 +552,28 @@
     (read-symbol rdr pct)
     (let [ch (peek-char rdr)]
       (cond
-        (or (whitespace? ch)
-            (macro-terminating? ch)
-            (nil? ch))
-        (register-arg 1)
+       (or (whitespace? ch)
+           (macro-terminating? ch)
+           (nil? ch))
+       (register-arg 1)
 
-        (identical? ch \&)
-        (do (read-char rdr)
-            (register-arg -1))
+       (= ch \&)
+       (do (read-char rdr)
+           (register-arg -1))
 
-        :else
-        (let [n (read* rdr true nil opts pending-forms)]
-          (if-not (integer? n)
-            (throw (ex-info "Arg literal must be %, %& or %integer"
-                            {:type :illegal-state}))
-            (register-arg n)))))))
+       :else
+       (let [n (read* rdr true nil opts pending-forms)]
+         (if-not (integer? n)
+           (throw (ex-info "Arg literal must be %, %& or %integer"
+                           {:type :illegal-state}))
+           (register-arg n)))))))
 
 (def ^:private ^:dynamic gensym-env nil)
 
 (defn- read-unquote
   [rdr comma opts pending-forms]
   (if-let [ch (peek-char rdr)]
-    (if (identical? \@ ch)
+    (if (= \@ ch)
       ((wrapping-reader 'clojure.core/unquote-splicing) (doto rdr read-char) \@ opts pending-forms)
       ((wrapping-reader 'clojure.core/unquote) rdr \~ opts pending-forms))))
 
@@ -595,9 +595,9 @@
       (let [item (first s)
             ret (conj! r
                        (cond
-                         (unquote? item)          (list 'clojure.core/list (second item))
-                         (unquote-splicing? item) (second item)
-                         :else                    (list 'clojure.core/list (syntax-quote* item))))]
+                        (unquote? item)          (list 'clojure.core/list (second item))
+                        (unquote-splicing? item) (second item)
+                        :else                    (list 'clojure.core/list (syntax-quote* item))))]
         (recur (next s) ret))
       (seq (persistent! r)))))
 
@@ -608,8 +608,8 @@
     (if s
       (let [e (first s)]
         (recur (next s) (-> key-vals
-                            (conj! (key e))
-                            (conj! (val e)))))
+                          (conj! (key e))
+                          (conj! (val e)))))
       (seq (persistent! key-vals)))))
 
 (defn- register-gensym [sym]
@@ -652,52 +652,52 @@
 (defn- syntax-quote* [form]
   (->>
    (cond
-     (special-symbol? form) (list 'quote form)
+    (special-symbol? form) (list 'quote form)
 
-     (symbol? form)
-     (list 'quote
-           (if (namespace form)
-             form
-             (if (goog.string/endsWith (name form) "#")
-               (register-gensym form)
-               form)))
+    (symbol? form)
+    (list 'quote
+          (if (namespace form)
+            form
+            (if (gstring/endsWith (name form) "#")
+              (register-gensym form)
+              form)))
 
-     (unquote? form) (second form)
-     (unquote-splicing? form) (throw (ex-info "unquote-splice not in list"
-                                              {:type :illegal-state}))
+    (unquote? form) (second form)
+    (unquote-splicing? form) (throw (ex-info "unquote-splice not in list"
+                                             {:type :illegal-state}))
 
-     (coll? form)
-     (cond
+    (coll? form)
+    (cond
 
-       (satisfies? IRecord form) form
-       (map? form) (syntax-quote-coll (map-func form) (flatten-map form))
-       (vector? form) (list 'cljs.core/vec (syntax-quote-coll nil form))
-       (set? form) (syntax-quote-coll 'cljs.core/hash-set form)
-       (or (seq? form) (list? form))
-       (let [seq (seq form)]
-         (if seq
-           (syntax-quote-coll nil seq)
-           '(cljs.core/list)))
+     (satisfies? IRecord form) form
+     (map? form) (syntax-quote-coll (map-func form) (flatten-map form))
+     (vector? form) (list 'cljs.core/vec (syntax-quote-coll nil form))
+     (set? form) (syntax-quote-coll 'cljs.core/hash-set form)
+     (or (seq? form) (list? form))
+     (let [seq (seq form)]
+       (if seq
+         (syntax-quote-coll nil seq)
+         '(cljs.core/list)))
 
-       :else (throw (ex-info "Unknown Collection type"
-                             {:type :unsupported-operation})))
+     :else (throw (ex-info "Unknown Collection type"
+                           {:type :unsupported-operation})))
 
-     (or (keyword? form)
-         (number? form)
-         (string? form)
-         (nil? form)
-         (bool? form)
-         (instance? js/RegExp form))
-     form
+    (or (keyword? form)
+        (number? form)
+        (string? form)
+        (nil? form)
+        (bool? form)
+        (instance? js/RegExp form))
+    form
 
-     :else (list 'quote form))
+    :else (list 'quote form))
    (add-meta form)))
 
 (defn- read-syntax-quote
   [rdr backquote opts pending-forms]
   (binding [gensym-env {}]
     (-> (read* rdr true nil opts pending-forms)
-        syntax-quote*)))
+      syntax-quote*)))
 
 (defn- macros [ch]
   (case ch
@@ -804,29 +804,29 @@
 
 (defn- read*
   ([reader eof-error? sentinel opts pending-forms]
-   (read* reader eof-error? sentinel nil opts pending-forms))
+     (read* reader eof-error? sentinel nil opts pending-forms))
   ([reader eof-error? sentinel return-on opts pending-forms]
-   (try
-     ((fn target []
-        (log-source reader
-          (fn []
-            (if (seq pending-forms)
-              (let [form (first pending-forms)]
-                 (goog.array/removeAt pending-forms 0)
-                 form)
-              (let [ch (read-char reader)]
-                (cond
-                  (whitespace? ch) (trampoline target)
-                  (nil? ch) (if eof-error? (reader-error reader "EOF") sentinel)
-                  (= ch return-on) READ_FINISHED
-                  (number-literal? reader ch) (read-number reader ch)
-                  :else (let [f (macros ch)]
-                          (if f
-                            (let [res (f reader ch opts pending-forms)]
-                              (if (identical? res reader)
-                                (trampoline target)
-                                res))
-                            (read-symbol reader ch))))))))))
+     (try
+       ((fn target []
+          (log-source reader
+            (fn []
+              (if (seq pending-forms)
+                (let [form (first pending-forms)]
+                  (garray/removeAt pending-forms 0)
+                  form)
+                (let [ch (read-char reader)]
+                  (cond
+                   (whitespace? ch) (trampoline target)
+                   (nil? ch) (if eof-error? (reader-error reader "EOF") sentinel)
+                   (= ch return-on) READ_FINISHED
+                   (number-literal? reader ch) (read-number reader ch)
+                   :else (let [f (macros ch)]
+                           (if f
+                             (let [res (f reader ch opts pending-forms)]
+                               (if (identical? res reader)
+                                 (trampoline target)
+                                 res))
+                             (read-symbol reader ch))))))))))
        (catch js/Error e
          (if (ex-info? e)
            (let [d (ex-data e)]
@@ -880,5 +880,5 @@
   ([s]
      (read-string {} s))
   ([opts s]
-     (when (and s (not (identical? s "")))
+     (when (and s (not= s ""))
        (read opts (string-push-back-reader s)))))

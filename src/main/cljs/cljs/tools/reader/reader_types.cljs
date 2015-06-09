@@ -10,9 +10,9 @@
       :author "Bronsa"}
   cljs.tools.reader.reader-types
   (:refer-clojure :exclude [char read-line])
-  (:require
-   [cljs.tools.reader.impl.utils :refer [char whitespace? newline?]]
-   [goog.string]))
+  (:require [cljs.tools.reader.impl.utils :refer [char whitespace? newline?]]
+            [goog.string])
+  (:import goog.string.StringBuffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; reader protocols
@@ -41,7 +41,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (deftype StringReader
-    [s s-len ^:unsynchronized-mutable s-pos]
+    [s s-len ^:mutable s-pos]
   Reader
   (read-char [reader]
     (when (> s-len s-pos)
@@ -52,7 +52,7 @@
     (when (> s-len s-pos)
       (nth s s-pos))))
 
-(deftype NodeReadableReader [readable ^:unsynchronized-mutable buf]
+(deftype NodeReadableReader [readable ^:mutable buf]
   Reader
   (read-char [reader]
     (if buf
@@ -69,7 +69,7 @@
       (char (aget buf 0)))))
 
 (deftype PushbackReader
-    [rdr buf buf-len ^:unsynchronized-mutable buf-pos]
+    [rdr buf buf-len ^:mutable buf-pos]
   Reader
   (read-char [reader]
     (char
@@ -100,9 +100,9 @@
     ch))
 
 (deftype IndexingPushbackReader
-    [rdr ^:unsynchronized-mutable line ^:unsynchronized-mutable column
-     ^:unsynchronized-mutable line-start? ^:unsynchronized-mutable prev
-     ^:unsynchronized-mutable prev-column file-name]
+    [rdr ^:mutable line ^:mutable column
+     ^:mutable line-start? ^:mutable prev
+     ^:mutable prev-column file-name]
   Reader
   (read-char [reader]
     (when-let [ch (read-char rdr)]
@@ -163,9 +163,9 @@ logging frames. Called when pushing a character back."
     (.set buffer (subs (str buffer) 0 (dec (.getLength buffer))))))
 
 (deftype SourceLoggingPushbackReader
-    [rdr ^:unsynchronized-mutable line ^:unsynchronized-mutable column
-     ^:unsynchronized-mutable line-start? ^:unsynchronized-mutable prev
-     ^:unsynchronized-mutable prev-column file-name frames]
+    [rdr ^:mutable line ^:mutable column
+     ^:mutable line-start? ^:mutable prev
+     ^:mutable prev-column file-name frames]
   Reader
   (read-char [reader]
     (when-let [ch (read-char rdr)]
@@ -249,15 +249,15 @@ logging frames. Called when pushing a character back."
       nil
       0
       file-name
-      (atom {:buffer (goog.string.StringBuffer.) :offset '(0)}))))
+      (atom {:buffer (StringBuffer.) :offset '(0)}))))
 
 (defn read-line
   "Reads a line from the reader or from *in* if no reader is specified"
   ([rdr]
-   (loop [c (read-char rdr) s (goog.string.StringBuffer.)]
-     (if (newline? c)
-       (str s)
-       (recur (read-char rdr) (.append s c))))))
+     (loop [c (read-char rdr) s (StringBuffer.)]
+       (if (newline? c)
+         (str s)
+         (recur (read-char rdr) (.append s c))))))
 
 (defn reader-error
   "Throws an ExceptionInfo with the given message.

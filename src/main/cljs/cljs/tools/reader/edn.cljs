@@ -10,16 +10,16 @@
       :author "Bronsa"}
   cljs.tools.reader.edn
   (:refer-clojure :exclude [read read-string char default-data-readers])
-  (:require
-   [cljs.tools.reader.reader-types :refer
-    [read-char reader-error unread peek-char indexing-reader?
-     get-line-number get-column-number get-file-name string-push-back-reader]]
-   [cljs.tools.reader.impl.utils :refer
-    [char ex-info? whitespace? numeric? desugar-meta]]
-   [cljs.tools.reader.impl.commons :refer
-    [number-literal? read-past match-number parse-symbol read-comment throwing-reader]]
-   [cljs.tools.reader :refer [default-data-readers char-code]]
-   [goog.string]))
+  (:require [cljs.tools.reader.reader-types :refer
+             [read-char reader-error unread peek-char indexing-reader?
+              get-line-number get-column-number get-file-name string-push-back-reader]]
+            [cljs.tools.reader.impl.utils :refer
+             [char ex-info? whitespace? numeric? desugar-meta]]
+            [cljs.tools.reader.impl.commons :refer
+             [number-literal? read-past match-number parse-symbol read-comment throwing-reader]]
+            [cljs.tools.reader :refer [default-data-readers char-code]]
+            [goog.string :as gstring])
+  (:import goog.string.StringBuffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; helpers
@@ -28,15 +28,15 @@
 (declare read macros dispatch-macros)
 
 (defn- macro-terminating? [ch]
-  (and (not (identical? \# ch))
-       (not (identical? \' ch))
-       (not (identical? \: ch))
+  (and (not= \# ch)
+       (not= \' ch)
+       (not= \: ch)
        (macros ch)))
 
 (defn- not-constituent? [ch]
-  (or (identical? \@ ch)
-      (identical? \` ch)
-      (identical? \~ ch)))
+  (or (= \@ ch)
+      (= \` ch)
+      (= \~ ch)))
 
 (defn- read-token
   ([rdr initch]
@@ -51,7 +51,7 @@
       (reader-error rdr "Invalid leading character: " initch)
 
       :else
-      (loop [sb (goog.string.StringBuffer.)
+      (loop [sb (StringBuffer.)
              ch (do (unread rdr initch) initch)]
         (if (or (whitespace? ch)
                 (macro-terminating? ch)
@@ -83,40 +83,40 @@
 
 (defn- read-unicode-char
   ([token offset length base]
-   (let [l (+ offset length)]
-     (when-not (== (count token) l)
-       (throw (ex-info (str "Invalid unicode character: \\" token)
-                       {:type :illegal-argument})))
-     (loop [i offset uc 0]
-       (if (== i l)
-         (js/String.fromCharCode uc)
-         (let [d (char-code (nth token i) base)]
-           (if (== d -1)
-             (throw (ex-info (str "Invalid digit: " (nth token i))
-                             {:type :illegal-argument}))
-             (recur (inc i) (+ d (* uc base)))))))))
+     (let [l (+ offset length)]
+       (when-not (== (count token) l)
+         (throw (ex-info (str "Invalid unicode character: \\" token)
+                         {:type :illegal-argument})))
+       (loop [i offset uc 0]
+         (if (== i l)
+           (js/String.fromCharCode uc)
+           (let [d (char-code (nth token i) base)]
+             (if (== d -1)
+               (throw (ex-info (str "Invalid digit: " (nth token i))
+                               {:type :illegal-argument}))
+               (recur (inc i) (+ d (* uc base)))))))))
 
   ([rdr initch base length exact?]
-   (loop [i 1 uc (char-code initch base)]
-     (if (== uc -1)
-       (throw (ex-info (str "Invalid digit: " initch)
-                       {:type :illegal-argument}))
-       (if-not (== i length)
-         (let [ch (peek-char rdr)]
-           (if (or (whitespace? ch)
-                   (macros ch)
-                   (nil? ch))
-             (if exact?
-               (throw (ex-info (str "Invalid character length: " i ", should be: " length)
-                               {:type :illegal-argument}))
-               (js/String.fromCharCode uc))
-             (let [d (char-code ch base)]
-               (read-char rdr)
-               (if (== d -1)
-                 (throw (ex-info (str "Invalid digit: " ch)
+     (loop [i 1 uc (char-code initch base)]
+       (if (== uc -1)
+         (throw (ex-info (str "Invalid digit: " initch)
+                         {:type :illegal-argument}))
+         (if-not (== i length)
+           (let [ch (peek-char rdr)]
+             (if (or (whitespace? ch)
+                     (macros ch)
+                     (nil? ch))
+               (if exact?
+                 (throw (ex-info (str "Invalid character length: " i ", should be: " length)
                                  {:type :illegal-argument}))
-                 (recur (inc i) (+ d (* uc base)))))))
-         (js/String.fromCharCode uc))))))
+                 (js/String.fromCharCode uc))
+               (let [d (char-code ch base)]
+                 (read-char rdr)
+                 (if (== d -1)
+                   (throw (ex-info (str "Invalid digit: " ch)
+                                   {:type :illegal-argument}))
+                   (recur (inc i) (+ d (* uc base)))))))
+           (js/String.fromCharCode uc))))))
 
 (def ^:private ^:const upper-limit (int \uD7ff))
 (def ^:private ^:const lower-limit (int \uE000))
@@ -142,7 +142,7 @@
          (= token "formfeed") \formfeed
          (= token "return") \return
 
-         (goog.string/startsWith token "u")
+         (gstring/startsWith token "u")
          (let [c (read-unicode-char token 1 4 16)
                ic (.charCodeAt c)]
            (if (and (> ic upper-limit)
@@ -150,7 +150,7 @@
              (reader-error rdr "Invalid character constant: \\u" c)
              c))
 
-         (goog.string/startsWith token "o")
+         (gstring/startsWith token "o")
          (let [len (dec token-len)]
            (if (> len 3)
              (reader-error rdr "Invalid octal escape sequence length: " len)
@@ -173,7 +173,7 @@
           (reader-error rdr "EOF while reading"
                         (if first-line
                           (str ", starting at line" first-line))))
-        (if (identical? delim (char ch))
+        (if (= delim (char ch))
           (persistent! a)
           (if-let [macrofn (macros ch)]
             (let [mret (macrofn rdr ch opts)]
@@ -201,7 +201,7 @@
 
 (defn- read-number
   [reader initch opts]
-  (loop [sb (doto (goog.string.StringBuffer.) (.append initch))
+  (loop [sb (doto (StringBuffer.) (.append initch))
          ch (read-char reader)]
     (if (or (whitespace? ch) (macros ch) (nil? ch))
       (let [s (str sb)]
@@ -233,7 +233,7 @@
 
 (defn- read-string*
   [reader _ opts]
-  (loop [sb (goog.string.StringBuffer.)
+  (loop [sb (StringBuffer.)
          ch (read-char reader)]
     (case ch
       nil (reader-error reader "EOF while reading string")
@@ -269,7 +269,7 @@
         (if (and s (== -1 (.indexOf token "::")))
           (let [ns (s 0)
                 name (s 1)]
-            (if (identical? \: (nth token 0))
+            (if (= \: (nth token 0))
               (reader-error reader "Invalid token: :" token) ;; no ::keyword in edn
               (keyword ns name)))
           (reader-error reader "Invalid token: :" token)))
@@ -407,5 +407,5 @@
    opts is a map as per clojure.tools.reader.edn/read"
   ([s] (read-string {:eof nil} s))
   ([opts s]
-     (when (and s (not (identical? s "")))
+     (when (and s (not= s ""))
        (read opts (string-push-back-reader s)))))
