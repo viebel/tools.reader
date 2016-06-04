@@ -13,7 +13,8 @@
                             default-data-readers *default-data-reader-fn*
                             *data-readers* *suppress-read*])
   (:require-macros [cljs.tools.reader.reader-types :refer [log-source]])
-  (:require [cljs.tools.reader.reader-types :refer
+  (:require [goog.array :as garray]
+            [cljs.tools.reader.reader-types :refer
              [read-char reader-error unread peek-char indexing-reader?
               get-line-number get-column-number get-file-name
               string-push-back-reader]]
@@ -23,7 +24,6 @@
             [cljs.tools.reader.impl.commons :refer
              [number-literal? read-past match-number parse-symbol read-comment throwing-reader]]
             [clojure.string :as string]
-            [goog.array :as garray]
             [goog.string :as gstring])
   (:import goog.string.StringBuffer))
 
